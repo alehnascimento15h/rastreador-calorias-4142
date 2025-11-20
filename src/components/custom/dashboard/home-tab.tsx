@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Flame, Target, Droplet, Camera, Sparkles, Loader2 } from "lucide-react";
+import { Flame, Target, Droplet, Camera, Sparkles, Loader2, Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,44 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { supabase } from "@/lib/supabase";
 
 interface HomeTabProps {
   userData: any;
+  userId: string;
 }
 
-export default function HomeTab({ userData }: HomeTabProps) {
-  const [caloriesConsumed, setCaloriesConsumed] = useState(1450);
+interface Meal {
+  id: string;
+  name: string;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  meal_type: string;
+  meal_time: string;
+}
+
+interface DailyGoal {
+  calories_goal: number;
+  carbs_goal: number;
+  protein_goal: number;
+  fat_goal: number;
+  water_goal: number;
+  water_consumed: number;
+}
+
+export default function HomeTab({ userData, userId }: HomeTabProps) {
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [dailyGoal, setDailyGoal] = useState<DailyGoal>({
+    calories_goal: 2000,
+    carbs_goal: 250,
+    protein_goal: 120,
+    fat_goal: 65,
+    water_goal: 2.0,
+    water_consumed: 0,
+  });
+  const [activities, setActivities] = useState<any[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<any>(null);
   const [showResultDialog, setShowResultDialog] = useState(false);
@@ -26,9 +57,92 @@ export default function HomeTab({ userData }: HomeTabProps) {
   const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const caloriesGoal = 2000;
-  const caloriesRemaining = caloriesGoal - caloriesConsumed;
-  const progressPercentage = (caloriesConsumed / caloriesGoal) * 100;
+  // Calcular totais consumidos
+  const caloriesConsumed = meals.reduce((sum, meal) => sum + meal.calories, 0);
+  const carbsConsumed = meals.reduce((sum, meal) => sum + (meal.carbs || 0), 0);
+  const proteinConsumed = meals.reduce((sum, meal) => sum + (meal.protein || 0), 0);
+  const fatConsumed = meals.reduce((sum, meal) => sum + (meal.fat || 0), 0);
+  const caloriesBurned = activities.reduce((sum, act) => sum + act.calories_burned, 0);
+
+  const caloriesRemaining = dailyGoal.calories_goal - caloriesConsumed;
+  const progressPercentage = (caloriesConsumed / dailyGoal.calories_goal) * 100;
+
+  // Carregar dados do Supabase
+  useEffect(() => {
+    loadDailyData();
+  }, [userId]);
+
+  const loadDailyData = async () => {
+    try {
+      // Carregar meta diária
+      const today = new Date().toISOString().split('T')[0];
+      const { data: goalData, error: goalError } = await supabase
+        .from('daily_goals')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .single();
+
+      if (goalError && goalError.code !== 'PGRST116') {
+        console.error('Erro ao carregar meta:', goalError);
+      }
+
+      if (goalData) {
+        setDailyGoal(goalData);
+      } else {
+        // Criar meta padrão se não existir
+        const { data: newGoal, error: createError } = await supabase
+          .from('daily_goals')
+          .insert({
+            user_id: userId,
+            date: today,
+            calories_goal: 2000,
+            carbs_goal: 250,
+            protein_goal: 120,
+            fat_goal: 65,
+            water_goal: 2.0,
+            water_consumed: 0,
+          })
+          .select()
+          .single();
+
+        if (!createError && newGoal) {
+          setDailyGoal(newGoal);
+        }
+      }
+
+      // Carregar refeições do dia
+      const { data: mealsData, error: mealsError } = await supabase
+        .from('meals')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('meal_time', `${today}T00:00:00`)
+        .lte('meal_time', `${today}T23:59:59`)
+        .order('meal_time', { ascending: true });
+
+      if (mealsError) {
+        console.error('Erro ao carregar refeições:', mealsError);
+      } else {
+        setMeals(mealsData || []);
+      }
+
+      // Carregar atividades do dia
+      const { data: activitiesData, error: activitiesError } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('activity_date', `${today}T00:00:00`)
+        .lte('activity_date', `${today}T23:59:59`);
+
+      if (activitiesError) {
+        console.error('Erro ao carregar atividades:', activitiesError);
+      } else {
+        setActivities(activitiesData || []);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    }
+  };
 
   // Gerar sugestão personalizada com IA
   useEffect(() => {
@@ -50,14 +164,15 @@ export default function HomeTab({ userData }: HomeTabProps) {
               {
                 role: "user",
                 content: `Baseado no perfil do usuário:
-- Nome: ${userData?.name || "Usuário"}
+- Nome: ${userData?.full_name || userData?.name || "Usuário"}
 - Objetivo: ${userData?.goal || "perder peso"}
 - Peso: ${userData?.weight || "70"}kg
 - Altura: ${userData?.height || "170"}cm
 - Idade: ${userData?.age || "25"} anos
-- Nível de atividade: ${userData?.activityLevel || "moderado"}
-- Calorias consumidas hoje: ${caloriesConsumed} de ${caloriesGoal} kcal
+- Nível de atividade: ${userData?.activity_level || "moderado"}
+- Calorias consumidas hoje: ${caloriesConsumed} de ${dailyGoal.calories_goal} kcal
 - Progresso: ${progressPercentage.toFixed(0)}%
+- Refeições hoje: ${meals.length}
 
 Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Seja direto e motivador.`
               }
@@ -82,8 +197,10 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
       }
     };
 
-    generateAISuggestion();
-  }, [userData, caloriesConsumed, caloriesGoal, progressPercentage]);
+    if (userId && userData) {
+      generateAISuggestion();
+    }
+  }, [userData, caloriesConsumed, dailyGoal.calories_goal, progressPercentage, meals.length, userId]);
 
   const handleCameraClick = () => {
     cameraInputRef.current?.click();
@@ -131,20 +248,90 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
     }
   };
 
-  const addMealFromScan = () => {
-    if (scanResult) {
-      setCaloriesConsumed(prev => prev + scanResult.calories);
+  const addMealFromScan = async () => {
+    if (!scanResult) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('meals')
+        .insert({
+          user_id: userId,
+          name: scanResult.foodName,
+          calories: scanResult.calories,
+          carbs: scanResult.macros.carbs,
+          protein: scanResult.macros.protein,
+          fat: scanResult.macros.fat,
+          meal_type: 'Escaneada',
+          ingredients: scanResult.ingredients,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao adicionar refeição:', error);
+        alert('Erro ao adicionar refeição');
+        return;
+      }
+
+      // Atualizar lista de refeições
+      setMeals([...meals, data]);
       setShowResultDialog(false);
       setScanResult(null);
+    } catch (error) {
+      console.error('Erro ao adicionar refeição:', error);
+      alert('Erro ao adicionar refeição');
     }
+  };
+
+  const updateWaterConsumption = async (amount: number) => {
+    const newAmount = Math.max(0, dailyGoal.water_consumed + amount);
+    
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const { error } = await supabase
+        .from('daily_goals')
+        .update({ water_consumed: newAmount })
+        .eq('user_id', userId)
+        .eq('date', today);
+
+      if (error) {
+        console.error('Erro ao atualizar água:', error);
+        return;
+      }
+
+      setDailyGoal({ ...dailyGoal, water_consumed: newAmount });
+    } catch (error) {
+      console.error('Erro ao atualizar água:', error);
+    }
+  };
+
+  const getMealTypeLabel = (mealType: string) => {
+    const types: { [key: string]: string } = {
+      'breakfast': 'Café da manhã',
+      'lunch': 'Almoço',
+      'snack': 'Lanche',
+      'dinner': 'Jantar',
+      'Escaneada': 'Escaneada'
+    };
+    return types[mealType] || mealType;
   };
 
   return (
     <div className="p-4 space-y-6">
+      {/* Hidden camera input */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
       {/* Header */}
       <div className="pt-4">
         <h1 className="text-3xl font-bold text-gray-900">
-          Olá, {userData?.name || "Usuário"}! 👋
+          Olá, {userData?.full_name || userData?.name || "Usuário"}! 👋
         </h1>
         <p className="text-gray-600 mt-1">
           {new Date().toLocaleDateString("pt-BR", {
@@ -154,6 +341,27 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
           })}
         </p>
       </div>
+
+      {/* Scan Button */}
+      <Card className="p-6 bg-gradient-to-br from-cyan-500 to-blue-600 text-white border-0 shadow-xl">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold mb-1">Escanear com IA</h3>
+            <p className="text-sm opacity-90">Tire uma foto da sua refeição</p>
+          </div>
+          <Button
+            onClick={handleCameraClick}
+            disabled={isScanning}
+            className="h-14 w-14 rounded-full bg-white text-cyan-600 hover:bg-gray-100 shadow-lg"
+          >
+            {isScanning ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <Camera className="h-6 w-6" />
+            )}
+          </Button>
+        </div>
+      </Card>
 
       {/* Result Dialog */}
       <Dialog open={showResultDialog} onOpenChange={setShowResultDialog}>
@@ -256,7 +464,7 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-sm opacity-90">Meta de Calorias</p>
-            <h2 className="text-4xl font-bold mt-1">{caloriesGoal}</h2>
+            <h2 className="text-4xl font-bold mt-1">{dailyGoal.calories_goal}</h2>
             <p className="text-sm opacity-90 mt-1">kcal/dia</p>
           </div>
           <div className="text-right">
@@ -283,23 +491,38 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
               <span className="text-sm font-medium text-gray-700">
                 Carboidratos
               </span>
-              <span className="text-sm font-bold text-gray-900">180g / 250g</span>
+              <span className="text-sm font-bold text-gray-900">
+                {carbsConsumed.toFixed(0)}g / {dailyGoal.carbs_goal}g
+              </span>
             </div>
-            <Progress value={72} className="h-2 bg-orange-100" />
+            <Progress 
+              value={(carbsConsumed / dailyGoal.carbs_goal) * 100} 
+              className="h-2 bg-orange-100" 
+            />
           </div>
           <div>
             <div className="flex justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">Proteínas</span>
-              <span className="text-sm font-bold text-gray-900">85g / 120g</span>
+              <span className="text-sm font-bold text-gray-900">
+                {proteinConsumed.toFixed(0)}g / {dailyGoal.protein_goal}g
+              </span>
             </div>
-            <Progress value={71} className="h-2 bg-blue-100" />
+            <Progress 
+              value={(proteinConsumed / dailyGoal.protein_goal) * 100} 
+              className="h-2 bg-blue-100" 
+            />
           </div>
           <div>
             <div className="flex justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">Gorduras</span>
-              <span className="text-sm font-bold text-gray-900">45g / 65g</span>
+              <span className="text-sm font-bold text-gray-900">
+                {fatConsumed.toFixed(0)}g / {dailyGoal.fat_goal}g
+              </span>
             </div>
-            <Progress value={69} className="h-2 bg-yellow-100" />
+            <Progress 
+              value={(fatConsumed / dailyGoal.fat_goal) * 100} 
+              className="h-2 bg-yellow-100" 
+            />
           </div>
         </div>
       </Card>
@@ -313,7 +536,7 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
             </div>
             <div>
               <p className="text-sm text-gray-600">Queimadas</p>
-              <p className="text-xl font-bold text-gray-900">450 kcal</p>
+              <p className="text-xl font-bold text-gray-900">{caloriesBurned} kcal</p>
             </div>
           </div>
         </Card>
@@ -322,10 +545,19 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
             <div className="p-3 bg-blue-100 rounded-xl">
               <Droplet className="h-6 w-6 text-blue-600" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-gray-600">Água</p>
-              <p className="text-xl font-bold text-gray-900">1.5L / 2L</p>
+              <p className="text-xl font-bold text-gray-900">
+                {dailyGoal.water_consumed.toFixed(1)}L / {dailyGoal.water_goal}L
+              </p>
             </div>
+            <Button
+              size="sm"
+              onClick={() => updateWaterConsumption(0.25)}
+              className="h-8 w-8 p-0 bg-blue-500 hover:bg-blue-600"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
         </Card>
       </div>
@@ -333,26 +565,34 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
       {/* Today's Meals Summary */}
       <Card className="p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4">Refeições de Hoje</h3>
-        <div className="space-y-3">
-          {[
-            { name: "Café da manhã", calories: 450, time: "08:30" },
-            { name: "Almoço", calories: 650, time: "12:45" },
-            { name: "Lanche", calories: 350, time: "16:00" },
-          ].map((meal, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-            >
-              <div>
-                <p className="font-medium text-gray-900">{meal.name}</p>
-                <p className="text-sm text-gray-500">{meal.time}</p>
+        {meals.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <p>Nenhuma refeição registrada ainda</p>
+            <p className="text-sm mt-1">Use o botão de escanear para adicionar</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {meals.map((meal) => (
+              <div
+                key={meal.id}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              >
+                <div>
+                  <p className="font-medium text-gray-900">{meal.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {getMealTypeLabel(meal.meal_type)} • {new Date(meal.meal_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-900">{meal.calories} kcal</p>
+                  <p className="text-xs text-gray-500">
+                    C:{meal.carbs?.toFixed(0)}g P:{meal.protein?.toFixed(0)}g G:{meal.fat?.toFixed(0)}g
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-bold text-gray-900">{meal.calories} kcal</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* Weekly Challenge */}
