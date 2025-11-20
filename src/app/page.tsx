@@ -43,18 +43,30 @@ export default function Home() {
   }, [router]);
 
   const checkUserProfile = async (userId: string) => {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-    if (profile && profile.full_name) {
-      // Usuário já tem perfil completo
-      setUserData(profile);
-      setCurrentScreen("dashboard");
-    } else {
-      // Usuário precisa completar onboarding
+      if (error) {
+        // Se não encontrar perfil, vai para onboarding
+        console.log("Perfil não encontrado, iniciando onboarding");
+        setCurrentScreen("splash");
+        return;
+      }
+
+      if (profile && profile.full_name) {
+        // Usuário já tem perfil completo
+        setUserData(profile);
+        setCurrentScreen("dashboard");
+      } else {
+        // Usuário precisa completar onboarding
+        setCurrentScreen("splash");
+      }
+    } catch (error) {
+      console.error("Erro ao verificar perfil:", error);
       setCurrentScreen("splash");
     }
   };
@@ -66,24 +78,31 @@ export default function Home() {
   const handleOnboardingComplete = async (data: any) => {
     if (!user) return;
 
-    // Salvar perfil no Supabase
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({
-        id: user.id,
-        email: user.email!,
-        full_name: data.name,
-        age: data.age,
-        weight: data.weight,
-        height: data.height,
-        goal: data.goal,
-        activity_level: data.activityLevel,
-        updated_at: new Date().toISOString(),
-      });
+    try {
+      // Salvar perfil no Supabase
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: user.email!,
+          full_name: data.name,
+          age: data.age,
+          weight: data.weight,
+          height: data.height,
+          goal: data.goal,
+          activity_level: data.activityLevel,
+          updated_at: new Date().toISOString(),
+        });
 
-    if (!error) {
+      if (error) {
+        console.error("Erro ao salvar perfil:", error);
+        return;
+      }
+
       setUserData({ ...data, id: user.id, email: user.email });
       setCurrentScreen("dashboard");
+    } catch (error) {
+      console.error("Erro ao completar onboarding:", error);
     }
   };
 
@@ -103,7 +122,7 @@ export default function Home() {
       {currentScreen === "onboarding" && (
         <OnboardingFlow onComplete={handleOnboardingComplete} />
       )}
-      {currentScreen === "dashboard" && user && (
+      {currentScreen === "dashboard" && user && userData && (
         <Dashboard userData={userData} userId={user.id} />
       )}
     </div>

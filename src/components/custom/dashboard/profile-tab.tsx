@@ -9,9 +9,26 @@ import { Separator } from "@/components/ui/separator";
 
 interface ProfileTabProps {
   userData: any;
+  userId: string;
 }
 
-export default function ProfileTab({ userData }: ProfileTabProps) {
+export default function ProfileTab({ userData, userId }: ProfileTabProps) {
+  // Mapear os dados do Supabase para o formato esperado
+  const profileData = {
+    name: userData?.full_name || userData?.name || "Usuário",
+    email: userData?.email || "email@exemplo.com",
+    age: userData?.age || null,
+    weight: userData?.weight || null,
+    height: userData?.height || null,
+    goal: userData?.goal || "maintain",
+    activityLevel: userData?.activity_level || "moderate"
+  };
+
+  const handleLogout = async () => {
+    // Implementar logout
+    window.location.href = "/auth";
+  };
+
   return (
     <div className="p-4 space-y-6">
       {/* Header */}
@@ -24,13 +41,13 @@ export default function ProfileTab({ userData }: ProfileTabProps) {
       <Card className="p-6">
         <div className="flex items-center gap-4 mb-6">
           <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-3xl font-bold">
-            {userData?.name?.charAt(0).toUpperCase() || "U"}
+            {profileData.name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900">
-              {userData?.name || "Usuário"}
+              {profileData.name}
             </h2>
-            <p className="text-gray-600">{userData?.email || "email@exemplo.com"}</p>
+            <p className="text-gray-600">{profileData.email}</p>
           </div>
         </div>
         <Button variant="outline" className="w-full">
@@ -49,7 +66,7 @@ export default function ProfileTab({ userData }: ProfileTabProps) {
             <div className="flex-1">
               <p className="text-sm text-gray-500">Nome</p>
               <p className="font-medium text-gray-900">
-                {userData?.name || "Não informado"}
+                {profileData.name}
               </p>
             </div>
           </div>
@@ -58,21 +75,54 @@ export default function ProfileTab({ userData }: ProfileTabProps) {
             <div className="flex-1">
               <p className="text-sm text-gray-500">Email</p>
               <p className="font-medium text-gray-900">
-                {userData?.email || "Não informado"}
+                {profileData.email}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <Calendar className="h-5 w-5 text-gray-400" />
-            <div className="flex-1">
-              <p className="text-sm text-gray-500">Data de Nascimento</p>
-              <p className="font-medium text-gray-900">
-                {userData?.birthDate || "Não informado"}
-              </p>
+          {profileData.age && (
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Calendar className="h-5 w-5 text-gray-400" />
+              <div className="flex-1">
+                <p className="text-sm text-gray-500">Idade</p>
+                <p className="font-medium text-gray-900">
+                  {profileData.age} anos
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </Card>
+
+      {/* Physical Info */}
+      {(profileData.weight || profileData.height) && (
+        <Card className="p-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Dados Físicos</h3>
+          <div className="space-y-4">
+            {profileData.weight && (
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <Target className="h-5 w-5 text-gray-400" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500">Peso Atual</p>
+                  <p className="font-medium text-gray-900">
+                    {profileData.weight} kg
+                  </p>
+                </div>
+              </div>
+            )}
+            {profileData.height && (
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <Target className="h-5 w-5 text-gray-400" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500">Altura</p>
+                  <p className="font-medium text-gray-900">
+                    {profileData.height} cm
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Goals */}
       <Card className="p-6">
@@ -83,9 +133,9 @@ export default function ProfileTab({ userData }: ProfileTabProps) {
             <div className="flex-1">
               <p className="text-sm text-gray-500">Objetivo</p>
               <p className="font-medium text-gray-900">
-                {userData?.goal === "lose"
+                {profileData.goal === "lose"
                   ? "Perder peso"
-                  : userData?.goal === "gain"
+                  : profileData.goal === "gain"
                   ? "Ganhar peso"
                   : "Manter peso"}
               </p>
@@ -94,9 +144,17 @@ export default function ProfileTab({ userData }: ProfileTabProps) {
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
             <Target className="h-5 w-5 text-gray-400" />
             <div className="flex-1">
-              <p className="text-sm text-gray-500">Peso Atual → Meta</p>
+              <p className="text-sm text-gray-500">Nível de Atividade</p>
               <p className="font-medium text-gray-900">
-                {userData?.currentWeight || "70"} kg → {userData?.targetWeight || "65"} kg
+                {profileData.activityLevel === "sedentary"
+                  ? "Sedentário"
+                  : profileData.activityLevel === "light"
+                  ? "Leve"
+                  : profileData.activityLevel === "moderate"
+                  ? "Moderado"
+                  : profileData.activityLevel === "active"
+                  ? "Ativo"
+                  : "Muito Ativo"}
               </p>
             </div>
           </div>
@@ -134,6 +192,7 @@ export default function ProfileTab({ userData }: ProfileTabProps) {
 
       {/* Logout */}
       <Button
+        onClick={handleLogout}
         variant="outline"
         className="w-full h-12 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
       >
