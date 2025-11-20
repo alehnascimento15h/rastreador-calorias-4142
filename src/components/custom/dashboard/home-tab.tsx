@@ -1,17 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Flame, Target, Droplet, Camera, Sparkles, Loader2, Plus } from "lucide-react";
+import { Flame, Target, Droplet, Sparkles, Loader2, Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 
 interface HomeTabProps {
@@ -50,12 +43,8 @@ export default function HomeTab({ userData, userId }: HomeTabProps) {
     water_consumed: 0,
   });
   const [activities, setActivities] = useState<any[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<any>(null);
-  const [showResultDialog, setShowResultDialog] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<string>("");
   const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Calcular totais consumidos
   const caloriesConsumed = meals.reduce((sum, meal) => sum + meal.calories, 0);
@@ -202,87 +191,6 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
     }
   }, [userData, caloriesConsumed, dailyGoal.calories_goal, progressPercentage, meals.length, userId]);
 
-  const handleCameraClick = () => {
-    cameraInputRef.current?.click();
-  };
-
-  const processImageWithAI = async (file: File) => {
-    setIsScanning(true);
-    
-    try {
-      // Simular processamento com IA (aqui você integraria com uma API real de visão computacional)
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Resultado simulado - substitua por chamada real à API de IA
-      const mockResult = {
-        foodName: "Prato de Frango Grelhado com Arroz e Salada",
-        calories: 520,
-        macros: {
-          carbs: 45,
-          protein: 42,
-          fat: 18
-        },
-        confidence: 92,
-        ingredients: [
-          "Peito de frango grelhado (150g)",
-          "Arroz branco (100g)",
-          "Alface e tomate",
-          "Azeite (1 colher)"
-        ]
-      };
-
-      setScanResult(mockResult);
-      setShowResultDialog(true);
-    } catch (error) {
-      console.error("Erro ao processar imagem:", error);
-      alert("Erro ao processar imagem. Tente novamente.");
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      await processImageWithAI(file);
-    }
-  };
-
-  const addMealFromScan = async () => {
-    if (!scanResult) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('meals')
-        .insert({
-          user_id: userId,
-          name: scanResult.foodName,
-          calories: scanResult.calories,
-          carbs: scanResult.macros.carbs,
-          protein: scanResult.macros.protein,
-          fat: scanResult.macros.fat,
-          meal_type: 'Escaneada',
-          ingredients: scanResult.ingredients,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Erro ao adicionar refeição:', error);
-        alert('Erro ao adicionar refeição');
-        return;
-      }
-
-      // Atualizar lista de refeições
-      setMeals([...meals, data]);
-      setShowResultDialog(false);
-      setScanResult(null);
-    } catch (error) {
-      console.error('Erro ao adicionar refeição:', error);
-      alert('Erro ao adicionar refeição');
-    }
-  };
-
   const updateWaterConsumption = async (amount: number) => {
     const newAmount = Math.max(0, dailyGoal.water_consumed + amount);
     
@@ -318,16 +226,6 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
 
   return (
     <div className="p-4 space-y-6">
-      {/* Hidden camera input */}
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleFileChange}
-        className="hidden"
-      />
-
       {/* Header */}
       <div className="pt-4">
         <h1 className="text-3xl font-bold text-gray-900">
@@ -341,99 +239,6 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
           })}
         </p>
       </div>
-
-      {/* Scan Button */}
-      <Card className="p-6 bg-gradient-to-br from-cyan-500 to-blue-600 text-white border-0 shadow-xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-xl font-bold mb-1">Escanear com IA</h3>
-            <p className="text-sm opacity-90">Tire uma foto da sua refeição</p>
-          </div>
-          <Button
-            onClick={handleCameraClick}
-            disabled={isScanning}
-            className="h-14 w-14 rounded-full bg-white text-cyan-600 hover:bg-gray-100 shadow-lg"
-          >
-            {isScanning ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <Camera className="h-6 w-6" />
-            )}
-          </Button>
-        </div>
-      </Card>
-
-      {/* Result Dialog */}
-      <Dialog open={showResultDialog} onOpenChange={setShowResultDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Alimento Identificado! 🎉</DialogTitle>
-            <DialogDescription>
-              A IA analisou sua imagem com {scanResult?.confidence}% de confiança
-            </DialogDescription>
-          </DialogHeader>
-          
-          {scanResult && (
-            <div className="space-y-4">
-              <div className="p-4 bg-gradient-to-br from-cyan-50 to-blue-50 rounded-lg">
-                <h4 className="font-bold text-lg text-gray-900 mb-2">
-                  {scanResult.foodName}
-                </h4>
-                <div className="flex items-center gap-2 text-2xl font-bold text-cyan-600">
-                  <Flame className="h-6 w-6" />
-                  {scanResult.calories} kcal
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h5 className="font-semibold text-gray-900">Macronutrientes:</h5>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-3 bg-orange-50 rounded-lg text-center">
-                    <p className="text-xs text-gray-600">Carboidratos</p>
-                    <p className="text-lg font-bold text-orange-600">{scanResult.macros.carbs}g</p>
-                  </div>
-                  <div className="p-3 bg-blue-50 rounded-lg text-center">
-                    <p className="text-xs text-gray-600">Proteínas</p>
-                    <p className="text-lg font-bold text-blue-600">{scanResult.macros.protein}g</p>
-                  </div>
-                  <div className="p-3 bg-yellow-50 rounded-lg text-center">
-                    <p className="text-xs text-gray-600">Gorduras</p>
-                    <p className="text-lg font-bold text-yellow-600">{scanResult.macros.fat}g</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h5 className="font-semibold text-gray-900">Ingredientes detectados:</h5>
-                <ul className="space-y-1">
-                  {scanResult.ingredients.map((ingredient: string, index: number) => (
-                    <li key={index} className="text-sm text-gray-600 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-cyan-500 rounded-full"></span>
-                      {ingredient}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <Button
-                  onClick={() => setShowResultDialog(false)}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={addMealFromScan}
-                  className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
-                >
-                  Adicionar Refeição
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* AI Suggestion Card */}
       <Card className="flex flex-col gap-6 rounded-xl shadow-sm p-6 bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200">
@@ -568,7 +373,7 @@ Dê UMA sugestão prática e específica para hoje (máximo 2 frases curtas). Se
         {meals.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <p>Nenhuma refeição registrada ainda</p>
-            <p className="text-sm mt-1">Use o botão de escanear para adicionar</p>
+            <p className="text-sm mt-1">Adicione suas refeições para acompanhar seu progresso</p>
           </div>
         ) : (
           <div className="space-y-3">
