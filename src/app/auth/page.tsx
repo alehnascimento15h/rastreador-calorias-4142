@@ -1,120 +1,163 @@
 "use client";
 
-import { Auth } from '@supabase/auth-ui-react';
-import { ThemeSupa } from '@supabase/auth-ui-shared';
-import { supabase } from '@/lib/supabase';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Dumbbell } from 'lucide-react';
+import { useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Loader2, Sparkles } from "lucide-react";
 
 export default function AuthPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    // Verificar se usuário já está logado
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        router.push('/');
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      if (isLogin) {
+        // Login
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+
+        if (data.user) {
+          router.push("/");
+        }
       } else {
-        setLoading(false);
+        // Cadastro
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+
+        if (data.user) {
+          // Criar perfil inicial
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .insert({
+              id: data.user.id,
+              email: data.user.email!,
+            });
+
+          if (profileError) {
+            console.error("Erro ao criar perfil:", profileError);
+          }
+
+          router.push("/");
+        }
       }
-    });
-
-    // Listener para mudanças de autenticação
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        router.push('/');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
+    } catch (error: any) {
+      setError(error.message || "Erro ao autenticar");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          {/* Logo e Título */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl mb-4">
-              <Dumbbell className="w-8 h-8 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">AI RC</h1>
-            <p className="text-gray-600">Seu assistente inteligente para saúde e fitness</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 p-4">
+      <Card className="w-full max-w-md p-8 bg-white/95 backdrop-blur-sm shadow-2xl">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl mb-4 shadow-lg">
+            <Sparkles className="h-8 w-8 text-white" />
           </div>
-
-          {/* Formulário de Autenticação */}
-          <Auth
-            supabaseClient={supabase}
-            appearance={{
-              theme: ThemeSupa,
-              variables: {
-                default: {
-                  colors: {
-                    brand: '#3b82f6',
-                    brandAccent: '#2563eb',
-                  },
-                },
-              },
-              className: {
-                container: 'auth-container',
-                button: 'auth-button',
-                input: 'auth-input',
-              },
-            }}
-            localization={{
-              variables: {
-                sign_in: {
-                  email_label: 'Email',
-                  password_label: 'Senha',
-                  email_input_placeholder: 'seu@email.com',
-                  password_input_placeholder: 'Sua senha',
-                  button_label: 'Entrar',
-                  loading_button_label: 'Entrando...',
-                  social_provider_text: 'Entrar com {{provider}}',
-                  link_text: 'Já tem uma conta? Entre',
-                },
-                sign_up: {
-                  email_label: 'Email',
-                  password_label: 'Senha',
-                  email_input_placeholder: 'seu@email.com',
-                  password_input_placeholder: 'Crie uma senha',
-                  button_label: 'Cadastrar',
-                  loading_button_label: 'Cadastrando...',
-                  social_provider_text: 'Cadastrar com {{provider}}',
-                  link_text: 'Não tem uma conta? Cadastre-se',
-                },
-                forgotten_password: {
-                  email_label: 'Email',
-                  password_label: 'Senha',
-                  email_input_placeholder: 'seu@email.com',
-                  button_label: 'Enviar instruções',
-                  loading_button_label: 'Enviando...',
-                  link_text: 'Esqueceu sua senha?',
-                },
-              },
-            }}
-            providers={[]}
-            redirectTo={typeof window !== 'undefined' ? window.location.origin : ''}
-          />
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            AI RC
+          </h1>
+          <p className="text-gray-600">
+            {isLogin ? "Bem-vindo de volta!" : "Crie sua conta"}
+          </p>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-gray-600 text-sm mt-6">
-          Ao continuar, você concorda com nossos Termos de Uso e Política de Privacidade
-        </p>
-      </div>
+        <form onSubmit={handleAuth} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="seu@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="h-12"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">Senha</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="h-12"
+            />
+          </div>
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold shadow-lg"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Processando...
+              </>
+            ) : (
+              <>{isLogin ? "Entrar" : "Criar Conta"}</>
+            )}
+          </Button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError("");
+            }}
+            className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            {isLogin ? (
+              <>
+                Não tem uma conta?{" "}
+                <span className="font-semibold text-purple-600">
+                  Cadastre-se
+                </span>
+              </>
+            ) : (
+              <>
+                Já tem uma conta?{" "}
+                <span className="font-semibold text-purple-600">
+                  Faça login
+                </span>
+              </>
+            )}
+          </button>
+        </div>
+      </Card>
     </div>
   );
 }
