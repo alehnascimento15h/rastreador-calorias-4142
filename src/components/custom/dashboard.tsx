@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Home, Utensils, Dumbbell, TrendingUp, User, Camera, Plus } from "lucide-react";
+import { Home, Utensils, Dumbbell, TrendingUp, User } from "lucide-react";
 import HomeTab from "./dashboard/home-tab";
 import MealsTab from "./dashboard/meals-tab";
 import WorkoutsTab from "./dashboard/workouts-tab";
@@ -10,9 +10,10 @@ import ProfileTab from "./dashboard/profile-tab";
 
 interface DashboardProps {
   userData: any;
+  userId: string;
 }
 
-export default function Dashboard({ userData }: DashboardProps) {
+export default function Dashboard({ userData, userId }: DashboardProps) {
   const [activeTab, setActiveTab] = useState("home");
 
   const tabs = [
@@ -27,11 +28,11 @@ export default function Dashboard({ userData }: DashboardProps) {
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Content */}
       <div className="max-w-7xl mx-auto">
-        {activeTab === "home" && <HomeTab userData={userData} />}
-        {activeTab === "meals" && <MealsTab />}
-        {activeTab === "workouts" && <WorkoutsTab />}
-        {activeTab === "progress" && <ProgressTab userData={userData} />}
-        {activeTab === "profile" && <ProfileTab userData={userData} />}
+        {activeTab === "home" && <HomeTab userData={userData} userId={userId} />}
+        {activeTab === "meals" && <MealsTab userId={userId} />}
+        {activeTab === "workouts" && <WorkoutsTab userId={userId} />}
+        {activeTab === "progress" && <ProgressTab userData={userData} userId={userId} />}
+        {activeTab === "profile" && <ProfileTab userData={userData} userId={userId} />}
       </div>
 
       {/* Bottom Navigation */}
